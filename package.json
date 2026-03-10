@@ -4,11 +4,18 @@
   "description": "Sample REST API for employee management training",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "playwright test",
+    "test:report": "playwright show-report"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.18.2",
+    "express-session": "^1.19.0",
+    "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
   }
 }

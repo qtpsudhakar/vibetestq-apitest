@@ -1,6 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
+const session = require("express-session");
+const jwt = require("jsonwebtoken");
 const fs = require("fs/promises");
 const path = require("path");
 const crypto = require("crypto");
@@ -11,9 +13,23 @@ const DATA_DIR = path.join(__dirname, "data");
 const EMP_FILE = path.join(DATA_DIR, "employees.json");
 const USERS_FILE = path.join(DATA_DIR, "users.json");
 const API_KEY = process.env.API_KEY || "VT-EMP-KEY-123";
+const JWT_SECRET = process.env.JWT_SECRET || "vt-jwt-secret-key";
+
+// OAuth 2.0 client registry — client_id → { secret, scope }
+const clientRegistry = {
+  "vt-client-read":  { secret: "vt-secret-read-abc",  scope: "read" },
+  "vt-client-write": { secret: "vt-secret-write-xyz", scope: "write" }
+};
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: false })); // needed for OAuth form-encoded bodies
+app.use(session({
+  secret: process.env.SESSION_SECRET || "vt-session-secret",
+  resave: false,
+  saveUninitialized: false,
+  cookie: { httpOnly: true, maxAge: 3600000 }
+}));
 app.use((req, res, next) => {
   const requestId = crypto.randomUUID
     ? crypto.randomUUID()
@@ -113,18 +129,16 @@ const validateEmployee = (payload, { partial = false } = {}) => {
   return errors;
 };
 
-const tokenStore = new Map();
-
+// Issues a signed JWT for a user (1-hour expiry)
 const issueToken = (user) => {
-  const token = crypto.randomBytes(24).toString("hex");
-  const expiresAt = Date.now() + 60 * 60 * 1000;
-  tokenStore.set(token, {
+  const payload = {
     id: user.id,
     username: user.username,
     role: user.role,
-    name: user.name,
-    expiresAt
-  });
+    name: user.name
+  };
+  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "1h" });
+  const expiresAt = Date.now() + 60 * 60 * 1000;
   return { token, expiresAt };
 };
 
@@ -136,13 +150,18 @@ const getAuthContext = (req) => {
 
   const authHeader = req.header("authorization") || "";
   const [scheme, token] = authHeader.split(" ");
-  if (scheme?.toLowerCase() === "bearer" && tokenStore.has(token)) {
-    const session = tokenStore.get(token);
-    if (session.expiresAt < Date.now()) {
-      tokenStore.delete(token);
+  if (scheme?.toLowerCase() === "bearer" && token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      // OAuth 2.0 client credentials token
+      if (decoded.token_type === "oauth2") {
+        return { type: "oauth2", client_id: decoded.client_id, scope: decoded.scope, role: "service", name: decoded.client_id };
+      }
+      // Regular user JWT
+      return { type: "bearer", id: decoded.id, username: decoded.username, role: decoded.role, name: decoded.name };
+    } catch {
       return null;
     }
-    return { type: "bearer", ...session };
   }
 
   return null;
@@ -163,6 +182,127 @@ const requireAuth = (req, res, next) => {
   req.auth = auth;
   return next();
 };
+
+// Basic Auth middleware
+const requireBasicAuth = (req, res, next) => {
+  const authHeader = req.headers["authorization"] || "";
+  if (!authHeader.startsWith("Basic ")) {
+    res.setHeader("WWW-Authenticate", "Basic realm=\"Employee API\"");
+    return res.status(401).json({
+      error: { code: "AUTH_REQUIRED", message: "Basic authentication required" },
+      requestId: req.requestId
+    });
+  }
+  const decoded = Buffer.from(authHeader.split(" ")[1], "base64").toString("utf8");
+  const colonIndex = decoded.indexOf(":");
+  const username = decoded.slice(0, colonIndex);
+  const password = decoded.slice(colonIndex + 1);
+  if (username !== "admin" || password !== "admin123") {
+    return res.status(401).json({
+      error: { code: "INVALID_CREDENTIALS", message: "Invalid username or password" },
+      requestId: req.requestId
+    });
+  }
+  return next();
+};
+
+// Cookie/Session middleware
+const requireSession = (req, res, next) => {
+  if (!req.session.user) {
+    return res.status(401).json({
+      error: { code: "AUTH_REQUIRED", message: "Not authenticated. Please log in." },
+      requestId: req.requestId
+    });
+  }
+  return next();
+};
+
+// GET /auth/basic-test — example protected endpoint for Basic Auth
+app.get("/auth/basic-test", requireBasicAuth, (req, res) => {
+  res.json({ message: "Basic Auth successful", requestId: req.requestId });
+});
+
+// POST /auth/session/login — creates a session
+app.post("/auth/session/login", async (req, res, next) => {
+  try {
+    const { username, password } = req.body || {};
+    if (!username || !password) {
+      return res.status(400).json({
+        error: { code: "VALIDATION_ERROR", message: "username and password are required" },
+        requestId: req.requestId
+      });
+    }
+    const users = await readJson(USERS_FILE, []);
+    const user = users.find(
+      (item) =>
+        normalizeString(item.username) === normalizeString(username) &&
+        item.password === password
+    );
+    if (!user) {
+      return res.status(401).json({
+        error: { code: "INVALID_CREDENTIALS", message: "Invalid username or password" },
+        requestId: req.requestId
+      });
+    }
+    req.session.user = { id: user.id, username: user.username, role: user.role, name: user.name };
+    return res.json({ message: "Logged in successfully", requestId: req.requestId });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// POST /auth/session/logout — destroys the session
+app.post("/auth/session/logout", (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({
+        error: { code: "SERVER_ERROR", message: "Logout failed" },
+        requestId: req.requestId
+      });
+    }
+    res.clearCookie("connect.sid");
+    return res.json({ message: "Logged out successfully", requestId: req.requestId });
+  });
+});
+
+// GET /auth/session/me — returns session user
+app.get("/auth/session/me", requireSession, (req, res) => {
+  res.json({ user: req.session.user, requestId: req.requestId });
+});
+
+// POST /oauth/token — OAuth 2.0 Client Credentials flow
+// Accepts JSON or application/x-www-form-urlencoded
+app.post("/oauth/token", (req, res) => {
+  const { grant_type, client_id, client_secret } = req.body || {};
+
+  if (grant_type !== "client_credentials") {
+    return res.status(400).json({
+      error: "unsupported_grant_type",
+      error_description: "Only client_credentials grant type is supported"
+    });
+  }
+
+  const client = clientRegistry[client_id];
+  if (!client || client.secret !== client_secret) {
+    return res.status(401).json({
+      error: "invalid_client",
+      error_description: "Invalid client_id or client_secret"
+    });
+  }
+
+  const token = jwt.sign(
+    { client_id, scope: client.scope, token_type: "oauth2" },
+    JWT_SECRET,
+    { expiresIn: "1h" }
+  );
+
+  return res.json({
+    access_token: token,
+    token_type: "Bearer",
+    expires_in: 3600,
+    scope: client.scope
+  });
+});
 
 app.get("/health", (req, res) => {
   res.json({

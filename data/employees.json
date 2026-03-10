@@ -12,7 +12,11 @@
     "status": "active",
     "location": "Bengaluru",
     "managerId": 4,
-    "skills": ["Playwright", "API Testing", "TypeScript"],
+    "skills": [
+      "Playwright",
+      "API Testing",
+      "TypeScript"
+    ],
     "createdAt": "2023-04-10T09:15:00.000Z",
     "updatedAt": "2024-11-12T08:20:00.000Z"
   },
@@ -29,7 +33,11 @@
     "status": "active",
     "location": "Singapore",
     "managerId": 4,
-    "skills": ["Cypress", "CI/CD", "JavaScript"],
+    "skills": [
+      "Cypress",
+      "CI/CD",
+      "JavaScript"
+    ],
     "createdAt": "2022-09-18T10:00:00.000Z",
     "updatedAt": "2024-06-01T12:45:00.000Z"
   },
@@ -46,7 +54,10 @@
     "status": "active",
     "location": "Hyderabad",
     "managerId": null,
-    "skills": ["Recruitment", "Onboarding"],
+    "skills": [
+      "Recruitment",
+      "Onboarding"
+    ],
     "createdAt": "2021-02-05T09:30:00.000Z",
     "updatedAt": "2024-02-15T16:10:00.000Z"
   },
@@ -63,7 +74,11 @@
     "status": "active",
     "location": "Remote",
     "managerId": null,
-    "skills": ["Leadership", "Test Strategy", "Mentoring"],
+    "skills": [
+      "Leadership",
+      "Test Strategy",
+      "Mentoring"
+    ],
     "createdAt": "2020-01-20T08:00:00.000Z",
     "updatedAt": "2024-09-05T11:00:00.000Z"
   },
@@ -80,7 +95,10 @@
     "status": "on_leave",
     "location": "Chennai",
     "managerId": null,
-    "skills": ["Budgeting", "Reporting"],
+    "skills": [
+      "Budgeting",
+      "Reporting"
+    ],
     "createdAt": "2019-11-11T09:00:00.000Z",
     "updatedAt": "2024-03-18T14:22:00.000Z"
   },
@@ -97,8 +115,28 @@
     "status": "inactive",
     "location": "Pune",
     "managerId": null,
-    "skills": ["Scheduling", "Vendor Management"],
+    "skills": [
+      "Scheduling",
+      "Vendor Management"
+    ],
     "createdAt": "2023-07-01T10:10:00.000Z",
     "updatedAt": "2024-10-03T09:05:00.000Z"
+  },
+  {
+    "id": 7,
+    "firstName": "OAuth",
+    "lastName": "User",
+    "email": "oauth.user.1773162572773@vibetest.local",
+    "phone": "",
+    "department": "Marketing",
+    "role": "Designer",
+    "salary": 48000,
+    "hireDate": "2024-05-01",
+    "status": "active",
+    "location": "",
+    "managerId": null,
+    "skills": [],
+    "createdAt": "2026-03-10T17:09:32.774Z",
+    "updatedAt": "2026-03-10T17:09:32.774Z"
   }
 ]
