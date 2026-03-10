@@ -1,4 +1,4 @@
-# VibeTestAPI — Employee Management API & Test Suite
+# VibeTestQAPI — Employee Management API & Test Suite
 
 > © 2026 [VibeTestQ.com](https://vibetestq.com). All rights reserved.
 
